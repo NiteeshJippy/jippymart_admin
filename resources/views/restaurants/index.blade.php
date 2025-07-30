@@ -106,6 +106,59 @@
             </div>
         </div>
        </div>
+       <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border">
+                <div class="card-header d-flex justify-content-between align-items-center border-0">
+                    <div class="card-header-title">
+                        <h3 class="text-dark-2 mb-2 h4">Bulk Update Restaurants</h3>
+                        <p class="mb-0 text-dark-2">Upload Excel file to update multiple restaurants at once</p>
+                    </div>
+                    <div class="card-header-right d-flex align-items-center">
+                        <div class="card-header-btn mr-3">
+                            <a href="{{ route('restaurants.download-bulk-update-template') }}" class="btn btn-outline-primary rounded-full">
+                                <i class="mdi mdi-download mr-2"></i>Download Template
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form action="{{ route('restaurants.bulk-update') }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group">
+                                    <label for="bulkUpdateFile" class="control-label">Select Excel File (.xls/.xlsx)</label>
+                                    <input type="file" name="file" id="bulkUpdateFile" accept=".xls,.xlsx" class="form-control" required>
+                                    <div class="form-text text-muted">
+                                        <i class="mdi mdi-information-outline mr-1"></i>
+                                        File should contain: id, title, authorName, phonenumber, adminCommission, etc. (id is required)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary rounded-full">
+                                    <i class="mdi mdi-upload mr-2"></i>Bulk Update
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    @if(session('success'))
+        <div class="alert alert-success">{!! session('success') !!}</div>
+    @endif
+    @if($errors->any())
+        <div class="alert alert-danger">
+            <ul class="mb-0">
+                @foreach($errors->all() as $error)
+                    <li>{!! $error !!}</li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
        <div class="table-list">
         <div class="row">
             <div class="col-12">

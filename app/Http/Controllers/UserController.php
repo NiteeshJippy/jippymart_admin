@@ -16,6 +16,10 @@ use PaypalPayoutsSDK\Core\SandboxEnvironment;
 use PaypalPayoutsSDK\Core\ProductionEnvironment;
 use PaypalPayoutsSDK\Payouts\PayoutsPostRequest;
 use Razorpay\Api\Api;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use Google\Cloud\Firestore\FirestoreClient;
+use Illuminate\Support\Facades\Storage;
+use Carbon\Carbon;
 
 class UserController extends Controller
 {
@@ -646,5 +650,71 @@ class UserController extends Controller
         }
         
         return $payout_response;
+    }
+
+    public function import(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|mimes:xlsx,xls',
+        ]);
+
+        $spreadsheet = IOFactory::load($request->file('file'));
+        $rows = $spreadsheet->getActiveSheet()->toArray();
+
+        if (empty($rows) || count($rows) < 2) {
+            return back()->withErrors(['file' => 'The uploaded file is empty or missing data.']);
+        }
+
+        $headers = array_map('trim', array_shift($rows));
+        $firestore = new FirestoreClient([
+            'projectId' => config('firestore.project_id'),
+            'keyFilePath' => config('firestore.credentials'),
+        ]);
+        $collection = $firestore->collection('users');
+        $imported = 0;
+        foreach ($rows as $row) {
+            $data = array_combine($headers, $row);
+            if (empty($data['firstName']) || empty($data['lastName']) || empty($data['email']) || empty($data['password'])) {
+                continue; // Skip incomplete rows
+            }
+            $userData = [
+                'firstName' => $data['firstName'],
+                'lastName' => $data['lastName'],
+                'email' => $data['email'],
+                'password' => Hash::make($data['password']),
+                'active' => strtolower($data['active'] ?? '') === 'true',
+                'role' => $data['role'] ?? 'customer',
+                'profilePictureURL' => $data['profilePictureURL'] ?? '',
+                'migratedBy' => 'migrate:users',
+            ];
+            if (!empty($data['createdAt'])) {
+                try {
+                    $userData['createdAt'] = new \Google\Cloud\Core\Timestamp(Carbon::parse($data['createdAt']));
+                } catch (\Exception $e) {
+                    $userData['createdAt'] = new \Google\Cloud\Core\Timestamp(now());
+                }
+            } else {
+                $userData['createdAt'] = new \Google\Cloud\Core\Timestamp(now());
+            }
+            $docRef = $collection->add($userData);
+            $docRef->set(['id' => $docRef->id()], ['merge' => true]);
+            $imported++;
+        }
+        if ($imported === 0) {
+            return back()->withErrors(['file' => 'No valid rows were found to import.']);
+        }
+        return back()->with('success', "Users imported successfully! ($imported rows)");
+    }
+
+    public function downloadTemplate()
+    {
+        $filePath = storage_path('app/templates/users_import_template.xlsx');
+        if (!file_exists($filePath)) {
+            abort(404, 'Template file not found');
+        }
+        return response()->download($filePath, 'users_import_template.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Content-Disposition' => 'attachment; filename="users_import_template.xlsx"'
+        ]);
     }
 }

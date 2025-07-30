@@ -1,6 +1,8 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CuisineController;
 
 /*
 |--------------------------------------------------------------------------
@@ -146,6 +148,10 @@ Route::middleware(['permission:category,categories.create'])->group(function () 
     Route::get('/categories/create', [App\Http\Controllers\CategoryController::class, 'create'])->name('categories.create');
 
 });
+Route::post('/categories/import', [CategoryController::class, 'import'])->name('categories.import');
+Route::get('/categories/download-template', [CategoryController::class, 'downloadTemplate'])->name('categories.download-template');
+Route::post('/cuisines/import', [CuisineController::class, 'import'])->name('cuisines.import');
+Route::get('/cuisines/download-template', [CuisineController::class, 'downloadTemplate'])->name('cuisines.download-template');
 
 
 Route::get('/cuisines', [App\Http\Controllers\CuisineController::class, 'index'])->name('cuisines');
@@ -553,3 +559,9 @@ Route::get('/change-subscription', function () {
 Route::get('/edit-subscription', function () {
     return view('new_ui.edit-subscription');
 });
+Route::post('/users/import', [App\Http\Controllers\UserController::class, 'import'])->name('users.import');
+Route::get('/users/download-template', [App\Http\Controllers\UserController::class, 'downloadTemplate'])->name('users.download-template');
+Route::post('/vendors/import', [App\Http\Controllers\RestaurantController::class, 'importVendors'])->name('vendors.import');
+Route::get('/vendors/download-template', [App\Http\Controllers\RestaurantController::class, 'downloadVendorsTemplate'])->name('vendors.download-template');
+Route::post('/restaurants/bulk-update', [App\Http\Controllers\RestaurantController::class, 'bulkUpdate'])->name('restaurants.bulk-update');
+Route::get('/restaurants/download-bulk-update-template', [App\Http\Controllers\RestaurantController::class, 'downloadBulkUpdateTemplate'])->name('restaurants.download-bulk-update-template');

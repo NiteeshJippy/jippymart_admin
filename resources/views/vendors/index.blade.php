@@ -65,7 +65,61 @@
                 </div>
             </div>
         </div>
-        <div class="table-list">
+        @if(session('success'))
+    <div class="alert alert-success">{{ session('success') }}</div>
+@endif
+@if($errors->any())
+    <div class="alert alert-danger">
+        <ul class="mb-0">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border">
+            <div class="card-header d-flex justify-content-between align-items-center border-0">
+                <div class="card-header-title">
+                    <h3 class="text-dark-2 mb-2 h4">Bulk Import Vendors</h3>
+                    <p class="mb-0 text-dark-2">Upload Excel file to import multiple vendors at once</p>
+                </div>
+                <div class="card-header-right d-flex align-items-center">
+                    <div class="card-header-btn mr-3">
+                        <a href="{{ route('vendors.download-template') }}" class="btn btn-outline-primary rounded-full">
+                            <i class="mdi mdi-download mr-2"></i>Download Template
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <form action="{{ route('vendors.import') }}" method="POST" enctype="multipart/form-data">
+                    @csrf
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="form-group">
+                                <label for="importFile" class="control-label">Select Excel File (.xls/.xlsx)</label>
+                                <input type="file" name="file" id="importFile" accept=".xls,.xlsx" class="form-control" required>
+                                <div class="form-text text-muted">
+                                    <i class="mdi mdi-information-outline mr-1"></i>
+                                    File should contain: firstName, lastName, email, password, active, profilePictureURL, zoneId, phoneNumber, createdAt
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end">
+                            <button type="submit" class="btn btn-primary rounded-full">
+                                <i class="mdi mdi-upload mr-2"></i>Import Vendors
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+       <div class="table-list">
             <div class="row">
                 <div class="col-12">
                     <div class="card border">
@@ -155,92 +209,26 @@
             var data = listval.data();
             zones.push(data);
             $('.zone_selector').append($("<option></option>")
-                .attr("value", data.id)
+                .attr("value", listval.id)
                 .text(data.name));
         });
         // Build zoneId to name map
         zoneIdToName = {};
-        zones.forEach(function(zone) {
-            zoneIdToName[zone.id] = zone.name;
+        snapshots.docs.forEach(function(doc) {
+            var data = doc.data();
+            zoneIdToName[doc.id] = data.name;  // Use document ID as key
         });
         window.zoneIdToName = zoneIdToName;
         console.log('Zones loaded:', zones);
         console.log('zoneIdToName map:', zoneIdToName);
+        // ✅ Initialize DataTable only after zones are loaded
+        initializeVendorDataTable();
     }).catch(function(error) {
         console.error('Error fetching zones:', error);
     });
-    
-    $('.status_selector').select2({
-        placeholder: '{{trans("lang.status")}}',  
-        minimumResultsForSearch: Infinity,
-        allowClear: true 
-    });
-    
-    $('.zone_selector').select2({
-        placeholder: '{{trans("lang.select_zone")}}',  
-        minimumResultsForSearch: Infinity,
-        allowClear: true 
-    });
-    $('.zone_sort_selector').select2({
-        placeholder: '{{trans("lang.sort_by_zone")}}',  
-        minimumResultsForSearch: Infinity,
-        allowClear: true 
-    });
-    $('select').on("select2:unselecting", function(e) {
-        var self = $(this);
-        setTimeout(function() {
-            self.select2('close');
-        }, 0);
-    });
-    function setDate() {
-        $('#daterange span').html('{{trans("lang.select_range")}}');
-        $('#daterange').daterangepicker({
-            autoUpdateInput: false, 
-        }, function (start, end) {
-            $('#daterange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
-            $('.filteredRecords').trigger('change'); 
-        });
-        $('#daterange').on('apply.daterangepicker', function (ev, picker) {
-            $('#daterange span').html(picker.startDate.format('MMMM D, YYYY') + ' - ' + picker.endDate.format('MMMM D, YYYY'));
-            $('.filteredRecords').trigger('change');
-        });
-        $('#daterange').on('cancel.daterangepicker', function (ev, picker) {
-            $('#daterange span').html('{{trans("lang.select_range")}}');
-            $('.filteredRecords').trigger('change'); 
-        });
-    }
-    setDate();
-    $('.filteredRecords').change(async function() {
-        var status = $('.status_selector').val();
-        var zone = $('.zone_selector').val();
-        var zoneSort = $('.zone_sort_selector').val();
-        var daterangepicker = $('#daterange').data('daterangepicker');
-        var refData = initialRef;
-        
-        if(status) {
-            refData = (status === "active")
-                ? refData.where('active','==',true)
-                : refData.where('active','==',false);
-        }
-        
-        if ($('#daterange span').html() != '{{trans("lang.select_range")}}' && daterangepicker) {
-            var from = moment(daterangepicker.startDate).toDate();
-            var to = moment(daterangepicker.endDate).toDate();
-            if (from && to) { 
-                var fromDate = firebase.firestore.Timestamp.fromDate(new Date(from));
-                refData = refData.where('createdAt', '>=', fromDate);
-                var toDate = firebase.firestore.Timestamp.fromDate(new Date(to));
-                refData = refData.where('createdAt', '<=', toDate);
-            }
-        }
-        
-        // Store zone filter for use in ajax function
-        window.selectedZone = zone;
-        window.selectedZoneSort = zoneSort;
-        ref = refData;
-        $('#userTable').DataTable().ajax.reload();
-    });
-    $(document).ready(function() {
+
+    // Move DataTable initialization into a function
+    function initializeVendorDataTable() {
         $(document.body).on('click','.redirecttopage',function() {
             var url=$(this).attr('data-url');
             window.location.href=url;
@@ -502,6 +490,76 @@
                 table.search('').draw();
             }
         },300));
+    }
+    $('.status_selector').select2({
+        placeholder: '{{trans("lang.status")}}',  
+        minimumResultsForSearch: Infinity,
+        allowClear: true 
+    });
+    
+    $('.zone_selector').select2({
+        placeholder: '{{trans("lang.select_zone")}}',  
+        minimumResultsForSearch: Infinity,
+        allowClear: true 
+    });
+    $('.zone_sort_selector').select2({
+        placeholder: '{{trans("lang.sort_by_zone")}}',  
+        minimumResultsForSearch: Infinity,
+        allowClear: true 
+    });
+    $('select').on("select2:unselecting", function(e) {
+        var self = $(this);
+        setTimeout(function() {
+            self.select2('close');
+        }, 0);
+    });
+    function setDate() {
+        $('#daterange span').html('{{trans("lang.select_range")}}');
+        $('#daterange').daterangepicker({
+            autoUpdateInput: false, 
+        }, function (start, end) {
+            $('#daterange span').html(start.format('MMMM D, YYYY') + ' - ' + end.format('MMMM D, YYYY'));
+            $('.filteredRecords').trigger('change'); 
+        });
+        $('#daterange').on('apply.daterangepicker', function (ev, picker) {
+            $('#daterange span').html(picker.startDate.format('MMMM D, YYYY') + ' - ' + picker.endDate.format('MMMM D, YYYY'));
+            $('.filteredRecords').trigger('change');
+        });
+        $('#daterange').on('cancel.daterangepicker', function (ev, picker) {
+            $('#daterange span').html('{{trans("lang.select_range")}}');
+            $('.filteredRecords').trigger('change'); 
+        });
+    }
+    setDate();
+    $('.filteredRecords').change(async function() {
+        var status = $('.status_selector').val();
+        var zone = $('.zone_selector').val();
+        var zoneSort = $('.zone_sort_selector').val();
+        var daterangepicker = $('#daterange').data('daterangepicker');
+        var refData = initialRef;
+        
+        if(status) {
+            refData = (status === "active")
+                ? refData.where('active','==',true)
+                : refData.where('active','==',false);
+        }
+        
+        if ($('#daterange span').html() != '{{trans("lang.select_range")}}' && daterangepicker) {
+            var from = moment(daterangepicker.startDate).toDate();
+            var to = moment(daterangepicker.endDate).toDate();
+            if (from && to) { 
+                var fromDate = firebase.firestore.Timestamp.fromDate(new Date(from));
+                refData = refData.where('createdAt', '>=', fromDate);
+                var toDate = firebase.firestore.Timestamp.fromDate(new Date(to));
+                refData = refData.where('createdAt', '<=', toDate);
+            }
+        }
+        
+        // Store zone filter for use in ajax function
+        window.selectedZone = zone;
+        window.selectedZoneSort = zoneSort;
+        ref = refData;
+        $('#userTable').DataTable().ajax.reload();
     });
     async function buildHTML(listval) {
         var html=[];
@@ -515,8 +573,7 @@
         var trroute1='{{route("users.walletstransaction", ":id")}}';
         trroute1=trroute1.replace(':id',id);
         if(checkDeletePermission) {
-            html.push('<td class="delete-all"><input type="checkbox" id="is_open_'+id+'" class="is_open" dataId="'+id+'" data-vendorid="'+val.vendorID+'"><label class="col-3 control-label"\n'+
-                'for="is_open_'+id+'" ></label></td>');
+            html.push('<input type="checkbox" id="is_open_'+id+'" class="is_open" dataId="'+id+'" data-vendorid="'+val.vendorID+'"><label class="col-3 control-label" for="is_open_'+id+'"></label>');
         }
         if(val.profilePictureURL==''&&val.profilePictureURL==null) {
             imageHtml='<img width="100%" style="width:70px;height:70px;" src="'+placeholderImage+'" alt="image">';
@@ -583,6 +640,8 @@
         }
         action=action+'</span>';
         html.push(action);
+        // Debug: log the number of columns for each row
+        console.log('buildHTML columns:', html.length, html);
         return html;
     }
     async function getUserRestaurantInfo(userId) {

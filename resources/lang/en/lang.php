@@ -682,6 +682,8 @@ return [
 
     'order_plural' => 'Orders',
 
+    'all_status' => "All Status",
+
     'order_rejected' => "Order Rejected",
 
     'order_review' => "Order Review",

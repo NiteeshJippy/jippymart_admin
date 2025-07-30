@@ -11,6 +11,7 @@
     "php": "^8.1",
     "braintree/braintree_php": "^6.7",
     "google/apiclient": "^2.16",
+    "google/cloud-firestore": "^1.52",
     "guzzlehttp/guzzle": "^7.2",
     "illuminate/support": "^10.0",
     "laravel/framework": "^10.10",
@@ -19,6 +20,7 @@
     "laravel/ui": "^4.2.2",
     "paypal/paypal-payouts-sdk": "~1.0.0",
     "paytm/paytmchecksum": "^1.1",
+    "phpoffice/phpspreadsheet": "^4.5",
     "razorpay/razorpay": "2.*",
     "stripe/stripe-php": "^14.10"
   },
@@ -35,7 +37,10 @@
       "App\\": "app/",
       "Database\\Factories\\": "database/factories/",
       "Database\\Seeders\\": "database/seeders/"
-    }
+    },
+    "files": [
+      "app/helpers.php"
+    ]
   },
   "autoload-dev": {
     "psr-4": {

@@ -34,6 +34,7 @@
                                 <div class="select-box pl-3">
                                     <select class="form-control status_selector filteredRecords">
                                         <option value="" selected>{{trans("lang.status")}}</option>
+                                        <option value="All">{{trans("lang.all_status")}}</option>
                                         <option value="Order Placed">{{trans("lang.order_placed")}}</option>
                                         <option value="Order Accepted">{{trans("lang.order_accepted")}}</option>
                                         <option value="Order Rejected">{{trans("lang.order_rejected")}}</option>
@@ -197,6 +198,10 @@
 @section('scripts')
 <script type="text/javascript">
     var database=firebase.firestore();
+    console.log('=== FIREBASE CONNECTION TEST ===');
+    console.log('Firebase Firestore instance:', database);
+    console.log('Firebase app:', firebase.app());
+    
     var vendor_id='<?php echo $id; ?>';
     var append_list='';
     var redData=ref;
@@ -222,11 +227,19 @@
     var search=jQuery("#search").val();
     var refData=database.collection('restaurant_orders');
     var ref='';
+    
+    console.log('=== VARIABLE INITIALIZATION DEBUG ===');
+    console.log('order_status:', order_status);
+    console.log('search:', search);
+    console.log('refData:', refData);
+    console.log('Initial ref:', ref);
     $(document.body).on('change','#order_status',function() {
         order_status=jQuery(this).val();
+        console.log('order_status changed to:', order_status);
     });
     $(document.body).on('keyup','#search',function() {
         search=jQuery(this).val();
+        console.log('search changed to:', search);
     });
     var getId='<?php echo $id; ?>';
     var userID='<?php if (isset($_GET['userId'])) {
@@ -244,10 +257,16 @@
 } else {
     echo '';
 } ?>';
+    
+    console.log('=== URL PARAMETERS DEBUG ===');
+    console.log('getId:', getId);
+    console.log('userID:', userID);
+    console.log('driverID:', driverID);
+    console.log('orderStatus:', orderStatus);
     if(userID) {
         const getUserName=getUserNameFunction(userID);
         $('.userMenuTab').removeClass('d-none');
-        if((order_status=='All'||order_status!='')&&search!='') {
+        if(search!='') {
             ref=refData.where('authorID','==',userID);
         } else {
             ref=refData.orderBy('createdAt','desc').where('authorID','==',userID);
@@ -255,7 +274,7 @@
     } else if(driverID) {
         const getUserName=getUserNameFunction(driverID);
         $('.driverMenuTab').removeClass('d-none');
-        if((order_status=='All'||order_status!='')&&search!='') {
+        if(search!='') {
             ref=refData.where('driverID','==',driverID);
         } else {
             ref=refData.orderBy('createdAt','desc').where('driverID','==',driverID);
@@ -295,17 +314,26 @@
             $('#subscription_plan').append('<a href="'+"{{route('vendor.subscriptionPlanHistory', ':id')}}".replace(':id',vendorData.author)+'">'+'{{trans('lang.subscription_history')}}'+'</a>');
         });
         const getStoreName=getStoreNameFunction(getId);
-        if((order_status=='All'||order_status!='')&&search!='') {
+        if(search!='') {
             ref=refData.where('vendorID','==',getId);
         } else {
             ref=refData.orderBy('createdAt','desc').where('vendorID','==',getId);
         }
     } else {
-        if((order_status=='All'||order_status!='')&&search!='') {
+        console.log('=== INITIAL REF SETUP DEBUG ===');
+        console.log('No specific filters - setting up default reference');
+        console.log('order_status:', order_status);
+        console.log('search:', search);
+        console.log('refData:', refData);
+        
+        if(search!='') {
             ref=refData;
+            console.log('Setting ref to refData (no ordering) - search present');
         } else {
             ref=refData.orderBy('createdAt','desc');
+            console.log('Setting ref to refData.orderBy(createdAt,desc) - no search');
         }
+        console.log('Final initial ref:', ref);
     }
     database.collection('zone').where('publish','==',true).orderBy('name','asc').get().then(async function(snapshots) {
         snapshots.docs.forEach((listval) => {
@@ -361,14 +389,29 @@
         var orderType=$('.order_type_selector').val();
         var daterangepicker = $('#daterange').data('daterangepicker');
         var refData=initialRef;
+        
+        console.log('=== FILTER CHANGE DEBUG ===');
+        console.log('Selected Status:', status);
+        console.log('Selected Zone:', zoneValue);
+        console.log('Selected Order Type:', orderType);
+        console.log('Initial Ref:', initialRef);
+        console.log('Current Ref:', ref);
+        
         if(zoneValue) {
             refData=refData.where('zoneId','==',zoneValue);
+            console.log('Applied Zone Filter:', zoneValue);
         }
-        if(status) {
+        if(status && status !== 'All') {
             refData=refData.where('status','==',status);
+            console.log('Applied Status Filter:', status);
+        } else if(status === 'All') {
+            console.log('All Status Selected - No Status Filter Applied');
+        } else {
+            console.log('No Status Selected - No Status Filter Applied');
         }
         if(orderType) {
             refData=(orderType=='takeaway')? refData.where('takeAway','==',true):refData.where('takeAway','==',false);
+            console.log('Applied Order Type Filter:', orderType);
         }
         if ($('#daterange span').html() != '{{trans("lang.select_range")}}' && daterangepicker) {
             var from = moment(daterangepicker.startDate).toDate();
@@ -377,13 +420,35 @@
                 var fromDate = firebase.firestore.Timestamp.fromDate(new Date(from));
                 refData = refData.where('createdAt', '>=', fromDate);
                 var toDate = firebase.firestore.Timestamp.fromDate(new Date(to));
-                refData = refData.where('createdAt', '<=', toDate);
+                refData =refData.where('createdAt', '<=', toDate);
+                console.log('Applied Date Range Filter:', from, 'to', to);
             }
         }
         ref=refData;
+        console.log('Final Ref for DataTable:', ref);
         $('#orderTable').DataTable().ajax.reload();
     });
     $(document).ready(function() {
+        console.log('=== PAGE LOAD DEBUG ===');
+        console.log('Document Ready - Initializing DataTable');
+        console.log('Initial Ref:', ref);
+        console.log('Vendor ID:', vendor_id);
+        console.log('User ID:', userID);
+        console.log('Driver ID:', driverID);
+        console.log('Order Status:', orderStatus);
+        
+        // Test if there are any orders in the database at all
+        database.collection('restaurant_orders').limit(1).get().then(function(snapshot) {
+            console.log('=== DATABASE TEST ===');
+            console.log('Total orders in database:', snapshot.size);
+            console.log('Any orders exist:', !snapshot.empty);
+            if (!snapshot.empty) {
+                console.log('Sample order data:', snapshot.docs[0].data());
+            }
+        }).catch(function(error) {
+            console.error('Error testing database:', error);
+        });
+        
         jQuery('#search').hide();
         $(document.body).on('click','.redirecttopage',function() {
             var url=$(this).attr('data-url');
@@ -418,6 +483,12 @@
             serverSide: true, // Enable server-side processing
             responsive: true,
             ajax: async function(data,callback,settings) {
+                console.log('=== DATATABLE AJAX DEBUG ===');
+                console.log('DataTable Ajax Called');
+                console.log('Current Ref:', ref);
+                console.log('Search Value:', data.search.value);
+                console.log('Start:', data.start, 'Length:', data.length);
+                
                 const start=data.start;
                 const length=data.length;
                 const searchValue=data.search.value.toLowerCase();
@@ -436,10 +507,17 @@
                 if(searchValue.length>=3||searchValue.length===0) {
                     $('#data-table_processing').show();
                 }
+                console.log('About to fetch data from Firestore with ref:', ref);
                 await ref.get().then(async function(querySnapshot) {
+                    console.log('Firestore Query Result:');
+                    console.log('Query Snapshot Size:', querySnapshot.size);
+                    console.log('Query Snapshot Empty:', querySnapshot.empty);
+                    console.log('Query Snapshot Docs:', querySnapshot.docs.length);
+                    
                     if(querySnapshot.empty) {
                         $('.order_count').text(0);
                         console.error("No data found in Firestore.");
+                        console.log('Returning empty result to DataTable');
                         $('#data-table_processing').hide(); // Hide loader
                         callback({
                             draw: data.draw,
@@ -452,14 +530,31 @@
                     }
                     let records=[];
                     let filteredRecords=[];
+                    console.log('Processing', querySnapshot.docs.length, 'documents from Firestore');
+                    
                     await Promise.all(querySnapshot.docs.map(async (doc) => {
                         let childData=doc.data();
-                        childData.restaurants=childData.vendor.title;
+                        
+                        // Add null checks for vendor data
+                        if(childData.hasOwnProperty('vendor') && childData.vendor && childData.vendor.title) {
+                            childData.restaurants = childData.vendor.title;
+                        } else {
+                            childData.restaurants = 'N/A'; // Default value if vendor data is missing
+                            console.log('Warning: Missing vendor data for order:', doc.id);
+                        }
+                        
                         childData.driverName='';
                         if(childData.hasOwnProperty('driver')&&childData.driver!=null&&childData.driver!='') {
                             childData.driverName=childData.driver.firstName+' '+childData.driver.lastName;
                         }
-                        childData.client=childData.author.firstName+' '+childData.author.lastName
+                        
+                        // Add null checks for author data
+                        if(childData.hasOwnProperty('author') && childData.author && childData.author.firstName && childData.author.lastName) {
+                            childData.client=childData.author.firstName+' '+childData.author.lastName;
+                        } else {
+                            childData.client = 'N/A'; // Default value if author data is missing
+                            console.log('Warning: Missing author data for order:', doc.id);
+                        }
                         if(childData.hasOwnProperty('takeAway')&&childData.takeAway) {
                             childData.orderType="{{trans('lang.order_takeaway')}}"
                         } else {
@@ -515,6 +610,8 @@
                         }
                     });
                     const totalRecords=filteredRecords.length;
+                    console.log('Total Records after filtering:', totalRecords);
+                    console.log('Filtered Records:', filteredRecords);
                     $('.order_count').text(totalRecords);
                     const paginatedRecords=filteredRecords.slice(start,start+length);
                     await Promise.all(paginatedRecords.map(async (childData) => {
