@@ -269,6 +269,41 @@
         </div>
     </div>
 @endsection
+<style>
+.image-item {
+    position: relative;
+    display: inline-block;
+    margin: 5px;
+}
+
+.remove-btn, .set-main-btn {
+    position: absolute;
+    top: 5px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    border-radius: 50%;
+    width: 20px;
+    height: 20px;
+    text-align: center;
+    line-height: 20px;
+    cursor: pointer;
+    font-size: 10px;
+}
+
+.remove-btn {
+    right: 5px;
+}
+
+.set-main-btn {
+    left: 5px;
+}
+
+.set-main-btn:hover {
+    background: rgba(255,193,7,0.8);
+    color: #333;
+}
+</style>
+
 @section('scripts')
     <script>
         var id = "<?php echo $id;?>";
@@ -474,10 +509,13 @@
                     }
                     if (photos != '' && photos != null) {  
                         photos.forEach((element, index) => {
-                            $(".product_image").append('<span class="image-item" id="photo_' + index + '"><span class="remove-btn" data-id="' + index + '" data-img="' + photos[index] + '" data-status="old"><i class="fa fa-remove"></i></span><img onerror="this.onerror=null;this.src=\'' + placeholderImage + '\'" class="rounded" width="50px" id="" height="auto" src="' + photos[index] + '"></span>');
+                            var isMainPhoto = (photos[index] === photo);
+                            var mainIconClass = isMainPhoto ? 'fa-star' : 'fa-star-o';
+                            var mainIconStyle = isMainPhoto ? 'color: #ffc107;' : '';
+                            $(".product_image").append('<span class="image-item" id="photo_' + index + '"><span class="remove-btn" data-id="' + index + '" data-img="' + photos[index] + '" data-status="old"><i class="fa fa-remove"></i></span><span class="set-main-btn" data-id="' + index + '" data-img="' + photos[index] + '" data-status="old" style="' + mainIconStyle + '"><i class="fa ' + mainIconClass + '"></i></span><img onerror="this.onerror=null;this.src=\'' + placeholderImage + '\'" class="rounded" width="50px" id="" height="auto" src="' + photos[index] + '"></span>');
                         })
                     } else if (photo != '' && photo != null) {
-                        $(".product_image").append('<span class="image-item" id="photo_1"><img onerror="this.onerror=null;this.src=\'' + placeholderImage + '\'" class="rounded" width="50px" id="" height="auto" src="' + photo + '"></span>');
+                        $(".product_image").append('<span class="image-item" id="photo_1"><span class="set-main-btn" data-id="1" data-img="' + photo + '" data-status="old" style="color: #ffc107;"><i class="fa fa-star"></i></span><img onerror="this.onerror=null;this.src=\'' + placeholderImage + '\'" class="rounded" width="50px" id="" height="auto" src="' + photo + '"></span>');
                     } else {
                         $(".product_image").append('<span class="image-item" id="photo_1"><img class="rounded" style="width:50px" src="' + placeholderImage + '" alt="image">');
                     }
@@ -674,8 +712,15 @@
                     }
                     jQuery("#data-table_processing").show();
                 await storeImageData().then(async (IMG) => { 
-                    if (IMG.length > 0) {
+                    // Use the manually selected main photo if available, otherwise use the first image
+                    if (photo && photo !== '') {
+                        console.log('Using manually selected main photo:', photo);
+                    } else if (IMG.length > 0) {
                         photo = IMG[0];
+                        console.log('Using first image as main photo:', photo);
+                    } else {
+                        photo = '';
+                        console.log('No images available');
                     }
                     var foodIsAvailable = $(".food_is_available").is(":checked");
                     database.collection('vendor_products').doc(id).update({
@@ -822,13 +867,16 @@
             var newPhoto = [];
             if (photos.length > 0) {
                 newPhoto = photos; 
+                console.log('Existing photos:', photos);
             }
             if (new_added_photos.length > 0) {
+                console.log('New photos to upload:', new_added_photos.length);
                 await Promise.all(new_added_photos.map(async (foodPhoto, index) => {
                     foodPhoto = foodPhoto.replace(/^data:image\/[a-z]+;base64,/, "");
                     var uploadTask = await storageRef.child(new_added_photos_filename[index]).putString(foodPhoto, 'base64', { contentType: 'image/jpg' });
                     var downloadURL = await uploadTask.ref.getDownloadURL();
                     newPhoto.push(downloadURL);
+                    console.log('Uploaded new photo:', downloadURL);
                 }));
             }
             if (photosToDelete.length > 0) {
@@ -846,6 +894,7 @@
                     }
                 }));
             }
+            console.log('Final photo array:', newPhoto);
             return newPhoto;
         }
         $("#product_image").resizeImg({
@@ -857,7 +906,7 @@
                 var timestamp = Number(new Date());
                 var filename = filename.split('.')[0] + "_" + timestamp + '.' + ext;
                 productImagesCount++;
-                photos_html = '<span class="image-item" id="photo_' + productImagesCount + '"><span class="remove-btn" data-id="' + productImagesCount + '" data-img="' + base64str + '" data-status="new"><i class="fa fa-remove"></i></span><img class="rounded" width="50px" id="" height="auto" src="' + base64str + '"></span>'
+                photos_html = '<span class="image-item" id="photo_' + productImagesCount + '"><span class="remove-btn" data-id="' + productImagesCount + '" data-img="' + base64str + '" data-status="new"><i class="fa fa-remove"></i></span><span class="set-main-btn" data-id="' + productImagesCount + '" data-img="' + base64str + '" data-status="new"><i class="fa fa-star-o"></i></span><img class="rounded" width="50px" id="" height="auto" src="' + base64str + '"></span>'
                 $(".product_image").append(photos_html);
                 new_added_photos.push(base64str);
                 new_added_photos_filename.push(filename);
@@ -868,6 +917,22 @@
             var id = $(this).attr('data-id');
             var photo_remove = $(this).attr('data-img');
             var status=$(this).attr('data-status');
+            
+            // If we're removing the main photo, we need to set a new main photo
+            if (photo_remove === photo) {
+                // Find the first available image to set as main
+                var remainingPhotos = photos.filter(p => p !== photo_remove);
+                var remainingNewPhotos = new_added_photos.filter(p => p !== photo_remove);
+                
+                if (remainingPhotos.length > 0) {
+                    photo = remainingPhotos[0];
+                } else if (remainingNewPhotos.length > 0) {
+                    photo = remainingNewPhotos[0];
+                } else {
+                    photo = '';
+                }
+            }
+            
             if(status=="old"){
                  photosToDelete.push(firebase.storage().refFromURL(photo_remove));
             }
@@ -881,6 +946,23 @@
                 new_added_photos.splice(index, 1); // 2nd parameter means remove one item only
                 new_added_photos_filename.splice(index, 1);
             }
+        });
+        
+        $(document).on("click", ".set-main-btn", function () {
+            var id = $(this).attr('data-id');
+            var photo_url = $(this).attr('data-img');
+            var status = $(this).attr('data-status');
+            
+            // Set this image as the main photo
+            photo = photo_url;
+            
+            // Update all star icons to show which one is main
+            $(".set-main-btn i").removeClass('fa-star').addClass('fa-star-o');
+            $(".set-main-btn").css('color', '');
+            $(this).find('i').removeClass('fa-star-o').addClass('fa-star');
+            $(this).css('color', '#ffc107');
+            
+            console.log('Set main photo to:', photo);
         });
         $("#food_restaurant").change(function () {
             $("#attributes_div").show();
