@@ -111,19 +111,19 @@
             <div class="card border">
                 <div class="card-header d-flex justify-content-between align-items-center border-0">
                     <div class="card-header-title">
-                        <h3 class="text-dark-2 mb-2 h4">Bulk Update Restaurants</h3>
-                        <p class="mb-0 text-dark-2">Upload Excel file to update multiple restaurants at once</p>
+                        <h3 class="text-dark-2 mb-2 h4">Bulk Import/Update Restaurants</h3>
+                        <p class="mb-0 text-dark-2">Upload Excel file to import or update multiple restaurants at once</p>
                     </div>
                     <div class="card-header-right d-flex align-items-center">
                         <div class="card-header-btn mr-3">
-                            <a href="{{ route('restaurants.download-bulk-update-template') }}" class="btn btn-outline-primary rounded-full">
+                            <a href="{{ route('restaurants.download-template') }}" class="btn btn-outline-primary rounded-full">
                                 <i class="mdi mdi-download mr-2"></i>Download Template
                             </a>
                         </div>
                     </div>
                 </div>
                 <div class="card-body">
-                    <form action="{{ route('restaurants.bulk-update') }}" method="POST" enctype="multipart/form-data">
+                    <form action="{{ route('restaurants.bulk-import') }}" method="POST" enctype="multipart/form-data">
                         @csrf
                         <div class="row">
                             <div class="col-md-8">
