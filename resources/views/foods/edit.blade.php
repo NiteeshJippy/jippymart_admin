@@ -589,10 +589,13 @@
                 if (!foodProteins) {
                     foodProteins = 0;
                 }
-                if (photos.length > 0) {
-                    photo = photos[0];
-                } else {
-                    photo = '';
+                // Only set photo if it's not already set manually
+                if (!photo || photo === '') {
+                    if (photos.length > 0) {
+                        photo = photos[0];
+                    } else {
+                        photo = '';
+                    }
                 }
                 if (name == '') {
                     $(".error_top").show();
@@ -712,12 +715,23 @@
                     }
                     jQuery("#data-table_processing").show();
                 await storeImageData().then(async (IMG) => { 
-                    // Use the manually selected main photo if available, otherwise use the first image
-                    if (photo && photo !== '') {
-                        console.log('Using manually selected main photo:', photo);
+                    // Store the manually selected photo before any processing
+                    var selectedMainPhoto = photo;
+                    
+                    // Ensure we have a valid main photo
+                    if (selectedMainPhoto && selectedMainPhoto !== '') {
+                        // Check if the selected photo exists in the final image array
+                        if (IMG.includes(selectedMainPhoto)) {
+                            photo = selectedMainPhoto;
+                            console.log('Using manually selected main photo:', photo);
+                        } else {
+                            // If selected photo is not in final array, use first available
+                            photo = IMG.length > 0 ? IMG[0] : '';
+                            console.log('Selected photo not found in final array, using first image:', photo);
+                        }
                     } else if (IMG.length > 0) {
                         photo = IMG[0];
-                        console.log('Using first image as main photo:', photo);
+                        console.log('No manual selection, using first image as main photo:', photo);
                     } else {
                         photo = '';
                         console.log('No images available');
@@ -865,6 +879,9 @@
         }
         async function storeImageData() {
             var newPhoto = [];
+            // Store the current main photo to preserve it
+            var currentMainPhoto = photo;
+            
             if (photos.length > 0) {
                 newPhoto = photos; 
                 console.log('Existing photos:', photos);
@@ -895,6 +912,7 @@
                 }));
             }
             console.log('Final photo array:', newPhoto);
+            console.log('Current main photo variable:', photo);
             return newPhoto;
         }
         $("#product_image").resizeImg({
