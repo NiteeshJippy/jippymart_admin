@@ -53,15 +53,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                                 </div>
                             </div>
                             <div class="form-group row width-50">
-                                <label class="col-3 control-label">Restaurant Slug</label>
-                                <div class="col-7">
-                                    <input type="text" class="form-control restaurant_slug" readonly>
-                                    <div class="form-text text-muted">
-                                        Auto-generated URL-friendly identifier for the restaurant
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group row width-50">
                                 <label class="col-3 control-label">Cuisine</label>
                                 <div class="col-7">
                                     <select id='restaurant_vendor_cuisines' class="form-control" required>
@@ -121,15 +112,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                                     <select id='zone' class="form-control">
                                         <option value="">{{ trans("lang.select_zone") }}</option>
                                     </select>
-                                </div>
-                            </div>
-                            <div class="form-group row width-50">
-                                <label class="col-3 control-label">Zone Slug</label>
-                                <div class="col-7">
-                                    <input type="text" class="form-control zone_slug" readonly>
-                                    <div class="form-text text-muted">
-                                        Auto-generated URL-friendly identifier for the zone
-                                    </div>
                                 </div>
                             </div>
                             <div class="form-group row width-50">
@@ -980,18 +962,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                 }
                 $(".restaurant_name").val(restaurant.title);
                 
-                // Populate restaurant slug if it exists
-                if (restaurant.hasOwnProperty('restaurant_slug') && restaurant.restaurant_slug) {
-                    $(".restaurant_slug").val(restaurant.restaurant_slug);
-                } else if (restaurant.hasOwnProperty('restaurantSlug') && restaurant.restaurantSlug) {
-                    // Fallback for old field name
-                    $(".restaurant_slug").val(restaurant.restaurantSlug);
-                } else {
-                    // Generate slug from title if not exists
-                    var slug = generateSlug(restaurant.title);
-                    $(".restaurant_slug").val(slug);
-                }
-                
                 // Set isOpen checkbox
                 if (restaurant.hasOwnProperty('isOpen')) {
                     $("#is_open").prop("checked", restaurant.isOpen);
@@ -1289,21 +1259,6 @@ foreach ($countries as $keycountry => $valuecountry) {
             }
             if (restaurant.hasOwnProperty('zoneId') && restaurant.zoneId != '') {
                 $("#zone").val(restaurant.zoneId);
-                
-                // Populate zone slug if it exists
-                if (restaurant.hasOwnProperty('zone_slug') && restaurant.zone_slug) {
-                    $(".zone_slug").val(restaurant.zone_slug);
-                } else if (restaurant.hasOwnProperty('zoneSlug') && restaurant.zoneSlug) {
-                    // Fallback for old field name
-                    $(".zone_slug").val(restaurant.zoneSlug);
-                } else {
-                    // Generate slug from selected zone text if not exists
-                    var selectedZoneText = $("#zone option:selected").text();
-                    if (selectedZoneText && selectedZoneText !== '{{ trans("lang.select_zone") }}') {
-                        var slug = generateSlug(selectedZoneText);
-                        $(".zone_slug").val(slug);
-                    }
-                }
             }
             jQuery("#data-table_processing").hide();
         })
@@ -1345,7 +1300,6 @@ foreach ($countries as $keycountry => $valuecountry) {
         }
         $(".edit-form-btn").click(async function() {
             var restaurantname = $(".restaurant_name").val();
-            var restaurantSlug = $(".restaurant_slug").val();
             // Handle multiple category selection
             var categoryIDs = $("#restaurant_cuisines").val() || [];
             var categoryTitles = [];
@@ -1366,7 +1320,6 @@ foreach ($countries as $keycountry => $valuecountry) {
             var specialDiscountEnable = false;
             var restaurantCost = $(".restaurant_cost").val();
             var zoneId = $('#zone option:selected').val();
-            var zoneSlug = $(".zone_slug").val();
             var zoneArea = $('#zone option:selected').data('area');
             var isInZone = false;
             if(zoneId && zoneArea){
@@ -1616,7 +1569,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                             await storeMenuImageData().then(async (MenuIMG) => {
                                     geoFirestore.collection('vendors').doc(id).update({
                                         'title': restaurantname,
-                                        'restaurant_slug': restaurantSlug,
                                         'description': description,
                                         'latitude': latitude,
                                         'longitude': longitude,
@@ -1641,7 +1593,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                                         'specialDiscountEnable':specialDiscountEnable,
                                         'workingHours': workingHours,
                                         'zoneId': zoneId,
-                                        'zone_slug': zoneSlug,
                                         'adminCommission':adminCommission
                                     }).then(function(result) {
                                         if (resStoryVid.length > 0 || story_thumbnail != '') {
@@ -2654,35 +2605,5 @@ foreach ($countries as $keycountry => $valuecountry) {
             });
             $('#selected_categories').html(html);
         }
-
-    // Slug generation functionality
-    function generateSlug(text) {
-        return text
-            .toLowerCase()
-            .trim()
-            .replace(/[^\w\s-]/g, '') // Remove special characters except spaces and hyphens
-            .replace(/\s+/g, '-') // Replace spaces with hyphens
-            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-            .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
-    }
-
-    // Restaurant name to slug conversion
-    $('.restaurant_name').on('input', function() {
-        var restaurantName = $(this).val();
-        var slug = generateSlug(restaurantName);
-        $('.restaurant_slug').val(slug);
-    });
-
-    // Zone selection to slug conversion
-    $('#zone').on('change', function() {
-        var selectedZone = $(this).find('option:selected').text();
-        if (selectedZone && selectedZone !== '{{ trans("lang.select_zone") }}') {
-            var slug = generateSlug(selectedZone);
-            $('.zone_slug').val(slug);
-        } else {
-            $('.zone_slug').val('');
-        }
-    });
-
 </script>
 @endsection

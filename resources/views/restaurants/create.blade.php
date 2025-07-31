@@ -48,15 +48,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                                 </div>
                             </div>
                             <div class="form-group row width-50">
-                                <label class="col-3 control-label">Restaurant Slug</label>
-                                <div class="col-7">
-                                    <input type="text" class="form-control restaurant_slug" readonly>
-                                    <div class="form-text text-muted">
-                                        Auto-generated URL-friendly identifier for the restaurant
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="form-group row width-50">
                                 <label class="col-3 control-label">{{trans('lang.vendor')}}</label>
                                 <div class="col-7">
                                     <select id='restaurant_vendors' class="form-control" required>
@@ -144,15 +135,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                                     <select id='zone' class="form-control">
                                         <option value="">{{ trans("lang.select_zone") }}</option>
                                     </select>
-                                </div>
-                            </div>
-                            <div class="form-group row width-50">
-                                <label class="col-3 control-label">Zone Slug</label>
-                                <div class="col-7">
-                                    <input type="text" class="form-control zone_slug" readonly>
-                                    <div class="form-text text-muted">
-                                        Auto-generated URL-friendly identifier for the zone
-                                    </div>
                                 </div>
                             </div>
                             <div class="form-group row width-50" style="display:none">
@@ -1210,7 +1192,6 @@ foreach ($countries as $keycountry => $valuecountry) {
         $(".error_top").hide();
 
         var restaurantname=$(".restaurant_name").val();
-        var restaurantSlug = $(".restaurant_slug").val();
         // Handle multiple category selection
         var categoryIDs = $("#restaurant_cuisines").val() || [];
         var categoryTitles = [];
@@ -1229,7 +1210,6 @@ foreach ($countries as $keycountry => $valuecountry) {
         var commissionType=$("#commission_type").val();
         var fixCommission=$(".commission_fix").val();
         var zoneId=$('#zone option:selected').val();
-        var zoneSlug = $(".zone_slug").val();
         var zoneArea=$('#zone option:selected').data('area');
         var isInZone=false;
         if(zoneId&&zoneArea) {
@@ -1595,7 +1575,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                 const coordinates = new firebase.firestore.GeoPoint(latitude, longitude);
                 const restaurantData = {
                     'title': restaurantname,
-                    'restaurant_slug': restaurantSlug,
                     'description': description,
                     'latitude': latitude,
                     'longitude': longitude,
@@ -1625,7 +1604,6 @@ foreach ($countries as $keycountry => $valuecountry) {
                     'specialDiscount': specialDiscount,
                     'specialDiscountEnable': specialDiscountEnable,
                     'zoneId': zoneId,
-                    'zone_slug': zoneSlug,
                     'adminCommission': adminCommission,
                     'subscription_plan': subscription_plan,
                     'subscriptionPlanId': subscriptionPlanId,
@@ -2392,35 +2370,6 @@ foreach ($countries as $keycountry => $valuecountry) {
             }
         })
     })
-
-    // Slug generation functionality
-    function generateSlug(text) {
-        return text
-            .toLowerCase()
-            .trim()
-            .replace(/[^\w\s-]/g, '') // Remove special characters except spaces and hyphens
-            .replace(/\s+/g, '-') // Replace spaces with hyphens
-            .replace(/-+/g, '-') // Replace multiple hyphens with single hyphen
-            .replace(/^-+|-+$/g, ''); // Remove leading/trailing hyphens
-    }
-
-    // Restaurant name to slug conversion
-    $('.restaurant_name').on('input', function() {
-        var restaurantName = $(this).val();
-        var slug = generateSlug(restaurantName);
-        $('.restaurant_slug').val(slug);
-    });
-
-    // Zone selection to slug conversion
-    $('#zone').on('change', function() {
-        var selectedZone = $(this).find('option:selected').text();
-        if (selectedZone && selectedZone !== '{{ trans("lang.select_zone") }}') {
-            var slug = generateSlug(selectedZone);
-            $('.zone_slug').val(slug);
-        } else {
-            $('.zone_slug').val('');
-        }
-    });
 
 </script>
 @endsection  
