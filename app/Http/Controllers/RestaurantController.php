@@ -222,6 +222,9 @@ class RestaurantController extends Controller
             'file' => 'required|mimes:xlsx,xls',
         ]);
         
+        // Get options for handling invalid rows
+        $skipInvalidRows = $request->input('skip_invalid_rows', false);
+        
         $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($request->file('file'));
         $rows = $spreadsheet->getActiveSheet()->toArray();
         
@@ -230,6 +233,16 @@ class RestaurantController extends Controller
         }
         
         $headers = array_map('trim', array_shift($rows));
+        
+        // Validate headers
+        $requiredHeaders = ['title', 'description', 'latitude', 'longitude', 'location', 'phonenumber', 'countryCode'];
+        $missingHeaders = array_diff($requiredHeaders, $headers);
+        
+        if (!empty($missingHeaders)) {
+            return back()->withErrors(['file' => 'Missing required columns: ' . implode(', ', $missingHeaders) . 
+                '. Please use the template provided by the "Download Template" button.']);
+        }
+        
         $firestore = new \Google\Cloud\Firestore\FirestoreClient([
             'projectId' => config('firestore.project_id'),
             'keyFilePath' => config('firestore.credentials'),
@@ -243,24 +256,30 @@ class RestaurantController extends Controller
         
         $created = 0;
         $updated = 0;
-        $errors = [];
+        $failed = 0;
+        $skippedRows = 0;
         $processedRows = 0;
         
         // Pre-load lookup data for better performance
         $lookupData = $this->preloadLookupData($firestore);
         
         foreach ($batches as $batchIndex => $batch) {
-            $batchErrors = [];
             $batchCreated = 0;
             $batchUpdated = 0;
+            $batchFailed = 0;
             
             foreach ($batch as $rowIndex => $row) {
                 $globalRowIndex = $batchIndex * $batchSize + $rowIndex;
                 $rowNum = $globalRowIndex + 2; // Excel row number
                 $data = array_combine($headers, $row);
                 
+                // Skip completely empty rows
+                if ($this->isEmptyRow($row)) {
+                    continue;
+                }
+                
                 try {
-                    $result = $this->processRestaurantRow($data, $rowNum, $firestore, $collection, $lookupData);
+                    $result = $this->processRestaurantRow($data, $rowNum, $firestore, $collection, $lookupData, $skipInvalidRows);
                     
                     if ($result['success']) {
                         if ($result['action'] === 'created') {
@@ -269,10 +288,14 @@ class RestaurantController extends Controller
                             $batchUpdated++;
                         }
                     } else {
-                        $batchErrors[] = $result['error'];
+                        if ($result['action'] === 'skipped') {
+                            $skippedRows++;
+                        } else {
+                            $batchFailed++;
+                        }
                     }
                 } catch (\Exception $e) {
-                    $batchErrors[] = "Row $rowNum: Processing failed ({$e->getMessage()})";
+                    $batchFailed++;
                 }
                 
                 $processedRows++;
@@ -281,7 +304,7 @@ class RestaurantController extends Controller
             // Commit batch results
             $created += $batchCreated;
             $updated += $batchUpdated;
-            $errors = array_merge($errors, $batchErrors);
+            $failed += $batchFailed;
             
             // Log progress for large datasets
             if ($totalRows > 100) {
@@ -289,11 +312,12 @@ class RestaurantController extends Controller
             }
         }
         
-        $msg = "Restaurants updated: $updated, created: $created.";
-        if (!empty($errors)) {
-            $msg .= "<br>Some issues occurred:<br>" . implode('<br>', $errors);
+        $msg = "Restaurant created: $created, updated: $updated, failed: $failed";
+        if ($skippedRows > 0) {
+            $msg .= ", skipped: $skippedRows";
         }
-        if ($updated === 0 && $created === 0) {
+        
+        if ($failed > 0) {
             return back()->withErrors(['file' => $msg]);
         }
         return back()->with('success', $msg);
@@ -376,15 +400,23 @@ class RestaurantController extends Controller
     /**
      * Process a single restaurant row with optimized lookups
      */
-    private function processRestaurantRow($data, $rowNum, $firestore, $collection, $lookupData)
+    private function processRestaurantRow($data, $rowNum, $firestore, $collection, $lookupData, $skipInvalidRows = false)
     {
         // --- Data Validation ---
         $validationErrors = $this->validateRestaurantData($data, $rowNum);
         if (!empty($validationErrors)) {
-            return [
-                'success' => false,
-                'error' => implode('; ', $validationErrors)
-            ];
+            if ($skipInvalidRows) {
+                return [
+                    'success' => false,
+                    'action' => 'skipped',
+                    'error' => implode('; ', $validationErrors)
+                ];
+            } else {
+                return [
+                    'success' => false,
+                    'error' => implode('; ', $validationErrors)
+                ];
+            }
         }
         
         // --- Duplicate Detection ---
@@ -432,12 +464,12 @@ class RestaurantController extends Controller
         }
         
         // --- Optimized Category lookup ---
-        if (!empty($data['categoryTitle']) && empty($data['categoryID'])) {
-            $titles = json_decode($data['categoryTitle'], true);
-            if (!is_array($titles)) $titles = explode(',', $data['categoryTitle']);
-            $categoryIDs = [];
+            if (!empty($data['categoryTitle']) && empty($data['categoryID'])) {
+                $titles = json_decode($data['categoryTitle'], true);
+                if (!is_array($titles)) $titles = explode(',', $data['categoryTitle']);
+                $categoryIDs = [];
             
-            foreach ($titles as $title) {
+                foreach ($titles as $title) {
                 $titleLower = strtolower(trim($title));
                 if (isset($lookupData['categories'][$titleLower])) {
                     $categoryIDs[] = $lookupData['categories'][$titleLower];
@@ -553,37 +585,50 @@ class RestaurantController extends Controller
         $data = $this->processDataTypes($data);
         
         // --- Create or Update with Retry Mechanism ---
-        if (!empty($data['id'])) {
-            // Update
+            if (!empty($data['id'])) {
+                // Update
             try {
                 return $this->retryFirestoreOperation(function() use ($collection, $data, $rowNum) {
-                    $docRef = $collection->document($data['id']);
-                    $snapshot = $docRef->snapshot();
-                    if (!$snapshot->exists()) {
+                $docRef = $collection->document($data['id']);
+                $snapshot = $docRef->snapshot();
+                if (!$snapshot->exists()) {
                         return [
                             'success' => false,
                             'error' => "Row $rowNum: Restaurant with ID {$data['id']} not found."
                         ];
-                    }
-                    $updateData = $data;
-                    unset($updateData['id']);
+                }
+                $updateData = $data;
+                unset($updateData['id']);
+                
+                // Filter out empty keys to prevent "empty field paths" error
+                $updateData = array_filter($updateData, function($value, $key) {
+                    return !empty($key) && $value !== null && $value !== '';
+                }, ARRAY_FILTER_USE_BOTH);
+                
+                if (!empty($updateData)) {
                     $docRef->update(array_map(
                         fn($k, $v) => ['path' => $k, 'value' => $v],
                         array_keys($updateData), $updateData
                     ));
+                }
                     return ['success' => true, 'action' => 'updated'];
                 });
-            } catch (\Exception $e) {
+                } catch (\Exception $e) {
                 return [
                     'success' => false,
                     'error' => "Row $rowNum: Update failed after retries ({$e->getMessage()})"
                 ];
-            }
-        } else {
-            // Create (auto Firestore ID)
-            try {
+                }
+            } else {
+                // Create (auto Firestore ID)
+                try {
                 return $this->retryFirestoreOperation(function() use ($collection, $data) {
-                    $docRef = $collection->add($data);
+                    // Filter out empty values to prevent issues
+                    $createData = array_filter($data, function($value, $key) {
+                        return !empty($key) && $value !== null && $value !== '';
+                    }, ARRAY_FILTER_USE_BOTH);
+                    
+                    $docRef = $collection->add($createData);
                     $docRef->set(['id' => $docRef->id()], ['merge' => true]);
                     return ['success' => true, 'action' => 'created'];
                 });
@@ -603,12 +648,25 @@ class RestaurantController extends Controller
     {
         $errors = [];
         
-        // Required field validation
+        // Clean and trim data first
+        $data = array_map(function($value) {
+            return is_string($value) ? trim($value) : $value;
+        }, $data);
+        
+        // Required field validation - collect all missing fields for this row
         $requiredFields = ['title', 'description', 'latitude', 'longitude', 'location', 'phonenumber', 'countryCode'];
+        $missingFields = [];
+        
         foreach ($requiredFields as $field) {
             if (empty($data[$field])) {
-                $errors[] = "Row $rowNum: Missing required field '$field'";
+                $missingFields[] = $field;
             }
+        }
+        
+        // If there are missing required fields, create a simple error message
+        if (!empty($missingFields)) {
+            $errors[] = "Row $rowNum: Missing required fields: " . implode(', ', $missingFields);
+            return $errors; // Return early since missing required fields is a critical error
         }
         
         // Email validation
@@ -673,6 +731,55 @@ class RestaurantController extends Controller
     }
     
     /**
+     * Provide helpful guidance for common validation errors
+     */
+    private function getValidationGuidance($missingFields)
+    {
+        $guidance = [];
+        
+        foreach ($missingFields as $field) {
+            switch ($field) {
+                case 'title':
+                    $guidance[] = "Restaurant name is required";
+                    break;
+                case 'description':
+                    $guidance[] = "Restaurant description is required";
+                    break;
+                case 'latitude':
+                    $guidance[] = "Latitude coordinate is required (use Google Maps to get coordinates)";
+                    break;
+                case 'longitude':
+                    $guidance[] = "Longitude coordinate is required (use Google Maps to get coordinates)";
+                    break;
+                case 'location':
+                    $guidance[] = "Full address is required";
+                    break;
+                case 'phonenumber':
+                    $guidance[] = "Phone number is required (7-20 digits, can include +, -, spaces)";
+                    break;
+                case 'countryCode':
+                    $guidance[] = "Country code is required (e.g., IN for India, US for United States)";
+                    break;
+            }
+        }
+        
+        return $guidance;
+    }
+    
+    /**
+     * Check if a row is completely empty
+     */
+    private function isEmptyRow($row)
+    {
+        foreach ($row as $cell) {
+            if (!empty(trim($cell))) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+    /**
      * Check for duplicate restaurants
      */
     private function checkDuplicateRestaurant($data, $lookupData, $rowNum)
@@ -705,7 +812,7 @@ class RestaurantController extends Controller
         while ($attempts < $maxRetries) {
             try {
                 return $operation();
-            } catch (\Exception $e) {
+                } catch (\Exception $e) {
                 $lastException = $e;
                 $attempts++;
                 
@@ -960,70 +1067,73 @@ class RestaurantController extends Controller
 
     public function downloadBulkUpdateTemplate()
     {
-        // Create a new Spreadsheet
-        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        
-        // Set up headers with proper column names
-        $headers = [
-            'title',                    // Required: Restaurant name
-            'description',              // Required: Restaurant description
-            'latitude',                 // Required: Latitude coordinate (-90 to 90)
-            'longitude',                // Required: Longitude coordinate (-180 to 180)
-            'location',                 // Required: Address
-            'phonenumber',              // Required: Phone number
-            'countryCode',              // Required: Country code (e.g., "IN")
-            'zoneName',                 // Required: Zone name (will be converted to zoneId)
-            'authorName',               // Optional: Vendor name (will be converted to author ID)
-            'authorEmail',              // Optional: Vendor email (alternative to authorName)
-            'categoryTitle',            // Required: Category names (comma-separated or JSON array)
-            'vendorCuisineTitle',       // Required: Vendor cuisine name (will be converted to vendorCuisineID)
-            'adminCommission',          // Optional: Commission structure (JSON string)
-            'isOpen',                   // Optional: Restaurant open status (true/false)
-            'enabledDiveInFuture',      // Optional: Dine-in future enabled (true/false)
-            'restaurantCost',           // Optional: Restaurant cost (number)
-            'openDineTime',             // Optional: Opening time (HH:MM format)
-            'closeDineTime',            // Optional: Closing time (HH:MM format)
-            'photo',                    // Optional: Main photo URL
-            'hidephotos',               // Optional: Hide photos (true/false)
-            'specialDiscountEnable'     // Optional: Special discount enabled (true/false)
-        ];
-        
-        // Set headers
-        foreach ($headers as $colIndex => $header) {
-            $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
-            $sheet->setCellValue($column . '1', $header);
+        try {
+            // Create a new Spreadsheet
+            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+            $sheet = $spreadsheet->getActiveSheet();
             
-            // Style headers
-            $sheet->getStyle($column . '1')->getFont()->setBold(true);
-            $sheet->getStyle($column . '1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
-            $sheet->getStyle($column . '1')->getFill()->getStartColor()->setRGB('E6E6FA');
-        }
+            // Set up headers with proper column names
+            $headers = [
+                'id',                       // Optional: Restaurant ID (for updates)
+                'title',                    // Required: Restaurant name
+                'description',              // Required: Restaurant description
+                'latitude',                 // Required: Latitude coordinate (-90 to 90)
+                'longitude',                // Required: Longitude coordinate (-180 to 180)
+                'location',                 // Required: Address
+                'phonenumber',              // Required: Phone number
+                'countryCode',              // Required: Country code (e.g., "IN")
+                'zoneName',                 // Required: Zone name (will be converted to zoneId)
+                'authorName',               // Optional: Vendor name (will be converted to author ID)
+                'authorEmail',              // Optional: Vendor email (alternative to authorName)
+                'categoryTitle',            // Required: Category names (comma-separated or JSON array)
+                'vendorCuisineTitle',       // Required: Vendor cuisine name (will be converted to vendorCuisineID)
+                'adminCommission',          // Optional: Commission structure (JSON string)
+                'isOpen',                   // Optional: Restaurant open status (true/false)
+                'enabledDiveInFuture',      // Optional: Dine-in future enabled (true/false)
+                'restaurantCost',           // Optional: Restaurant cost (number)
+                'openDineTime',             // Optional: Opening time (HH:MM format)
+                'closeDineTime',            // Optional: Closing time (HH:MM format)
+                'photo',                    // Optional: Main photo URL
+                'hidephotos',               // Optional: Hide photos (true/false)
+                'specialDiscountEnable'     // Optional: Special discount enabled (true/false)
+            ];
         
-        // Add sample data row
-        $sampleData = [
-            'Sample Restaurant',                    // title
-            'A great restaurant with delicious food', // description
-            '15.12345',                             // latitude
-            '80.12345',                             // longitude
-            '123 Main Street, City, State',         // location
-            '1234567890',                           // phonenumber
-            'IN',                                   // countryCode
-            'Ongole',                               // zoneName
-            'Vendor One',                           // authorName
-            'vendor@example.com',                   // authorEmail
-            'Biryani, Pizza',                       // categoryTitle
-            'Indian',                               // vendorCuisineTitle
-            '{"commissionType":"Percent","fix_commission":12,"isEnabled":true}', // adminCommission
-            'true',                                 // isOpen
-            'false',                                // enabledDiveInFuture
-            '250',                                  // restaurantCost
-            '09:30',                                // openDineTime
-            '22:00',                                // closeDineTime
-            'https://example.com/restaurant-photo.jpg', // photo
-            'false',                                // hidephotos
-            'false'                                 // specialDiscountEnable
-        ];
+            // Set headers
+            foreach ($headers as $colIndex => $header) {
+                $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
+                $sheet->setCellValue($column . '1', $header);
+                
+                // Style headers
+                $sheet->getStyle($column . '1')->getFont()->setBold(true);
+                $sheet->getStyle($column . '1')->getFill()->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID);
+                $sheet->getStyle($column . '1')->getFill()->getStartColor()->setRGB('E6E6FA');
+            }
+            
+            // Add sample data row
+            $sampleData = [
+                '',                                  // id (leave empty for new restaurants)
+                'Sample Restaurant',                 // title
+                'A great restaurant with delicious food', // description
+                '15.12345',                         // latitude
+                '80.12345',                         // longitude
+                '123 Main Street, City, State',     // location
+                '1234567890',                       // phonenumber
+                'IN',                               // countryCode
+                'Ongole',                           // zoneName
+                'Vendor One',                       // authorName
+                'vendor@example.com',               // authorEmail
+                'Biryani, Pizza',                   // categoryTitle
+                'Indian',                           // vendorCuisineTitle
+                '{"commissionType":"Percent","fix_commission":12,"isEnabled":true}', // adminCommission
+                'true',                             // isOpen
+                'false',                            // enabledDiveInFuture
+                '250',                              // restaurantCost
+                '09:30',                            // openDineTime
+                '22:00',                            // closeDineTime
+                'https://example.com/restaurant-photo.jpg', // photo
+                'false',                            // hidephotos
+                'false'                             // specialDiscountEnable
+            ];
         
         foreach ($sampleData as $colIndex => $value) {
             $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
@@ -1114,45 +1224,173 @@ class RestaurantController extends Controller
         // Add data validation for boolean fields
         $booleanFields = ['M', 'N', 'O', 'U', 'V']; // isOpen, enabledDiveInFuture, hidephotos, specialDiscountEnable
         foreach ($booleanFields as $column) {
-            $validation = $sheet->getDataValidation($column . '2:' . $column . '1000');
-            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
-            $validation->setFormula1('"true,false"');
-            $validation->setAllowBlank(false);
-            $validation->setShowDropDown(true);
-            $validation->setPromptTitle('Boolean Value');
-            $validation->setPrompt('Please select true or false');
-            $validation->setShowErrorMessage(true);
-            $validation->setErrorTitle('Invalid Value');
-            $validation->setError('Please select true or false only');
+            for ($row = 2; $row <= 1000; $row++) {
+                $validation = $sheet->getDataValidation($column . $row);
+                $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+                $validation->setFormula1('"true,false"');
+                $validation->setAllowBlank(false);
+                $validation->setShowDropDown(true);
+                $validation->setPromptTitle('Boolean Value');
+                $validation->setPrompt('Please select true or false');
+                $validation->setShowErrorMessage(true);
+                $validation->setErrorTitle('Invalid Value');
+                $validation->setError('Please select true or false only');
+            }
         }
         
         // Add data validation for country code
-        $validation = $sheet->getDataValidation('G2:G1000');
-        $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
-        $validation->setFormula1('"IN,US,UK,CA,AU,DE,FR,IT,ES,JP,CN,KR,BR,MX,AR,CL,CO,PE,VE,EC,BO,PY,UY,GY,SR,GF,FG,BR,AR,CL,CO,PE,VE,EC,BO,PY,UY,GY,SR,GF,FG"');
-        $validation->setAllowBlank(false);
-        $validation->setShowDropDown(true);
-        $validation->setPromptTitle('Country Code');
-        $validation->setPrompt('Please select a country code');
-        $validation->setShowErrorMessage(true);
-        $validation->setErrorTitle('Invalid Country Code');
-        $validation->setError('Please select a valid country code');
-        
-        // Create the Excel file
-        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-        $filePath = storage_path('app/templates/restaurants_bulk_update_template.xlsx');
-        
-        // Ensure directory exists
-        $directory = dirname($filePath);
-        if (!is_dir($directory)) {
-            mkdir($directory, 0755, true);
+        for ($row = 2; $row <= 1000; $row++) {
+            $validation = $sheet->getDataValidation('G' . $row);
+            $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+            $validation->setFormula1('"IN,US,UK,CA,AU,DE,FR,IT,ES,JP,CN,KR,BR,MX,AR,CL,CO,PE,VE,EC,BO,PY,UY,GY,SR,GF,FG,BR,AR,CL,CO,PE,VE,EC,BO,PY,UY,GY,SR,GF,FG"');
+            $validation->setAllowBlank(false);
+            $validation->setShowDropDown(true);
+            $validation->setPromptTitle('Country Code');
+            $validation->setPrompt('Please select a country code');
+            $validation->setShowErrorMessage(true);
+            $validation->setErrorTitle('Invalid Country Code');
+            $validation->setError('Please select a valid country code');
         }
         
-        $writer->save($filePath);
-        
-        return response()->download($filePath, 'restaurants_bulk_update_template.xlsx', [
-            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            'Content-Disposition' => 'attachment; filename="restaurants_bulk_update_template.xlsx"'
-        ]);
+            foreach ($sampleData as $colIndex => $value) {
+                $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
+                $sheet->setCellValue($column . '2', $value);
+            }
+            
+            // Add instructions row
+            $instructions = [
+                'Restaurant ID (optional - leave empty for new restaurants)', // id
+                'Restaurant name (required)',           // title
+                'Restaurant description (required)',    // description
+                'Latitude coordinate -90 to 90 (required)', // latitude
+                'Longitude coordinate -180 to 180 (required)', // longitude
+                'Full address (required)',              // location
+                'Phone number 7-20 digits (required)',  // phonenumber
+                'Country code like IN, US (required)',  // countryCode
+                'Zone name like Ongole, Hyderabad (required)', // zoneName
+                'Vendor name (optional)',               // authorName
+                'Vendor email (optional)',              // authorEmail
+                'Category names separated by comma (required)', // categoryTitle
+                'Cuisine name like Indian, Chinese (required)', // vendorCuisineTitle
+                'JSON format commission (optional)',    // adminCommission
+                'true/false for open status (optional)', // isOpen
+                'true/false for dine-in future (optional)', // enabledDiveInFuture
+                'Restaurant cost number (optional)',    // restaurantCost
+                'Opening time HH:MM format (optional)', // openDineTime
+                'Closing time HH:MM format (optional)', // closeDineTime
+                'Photo URL (optional)',                 // photo
+                'true/false to hide photos (optional)', // hidephotos
+                'true/false for special discount (optional)' // specialDiscountEnable
+            ];
+            
+            foreach ($instructions as $colIndex => $instruction) {
+                $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($colIndex + 1);
+                $sheet->setCellValue($column . '3', $instruction);
+                
+                // Style instructions
+                $sheet->getStyle($column . '3')->getFont()->setItalic(true);
+                $sheet->getStyle($column . '3')->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('666666'));
+            }
+            
+            // Add available zones and cuisines info (with error handling)
+            try {
+                $firestore = new \Google\Cloud\Firestore\FirestoreClient([
+                    'projectId' => config('firestore.project_id'),
+                    'keyFilePath' => config('firestore.credentials'),
+                ]);
+                
+                // Get available zones
+                $zoneDocs = $firestore->collection('zone')->documents();
+                $zones = [];
+                foreach ($zoneDocs as $zoneDoc) {
+                    $zone = $zoneDoc->data();
+                    if (isset($zone['name'])) {
+                        $zones[] = $zone['name'];
+                    }
+                }
+                
+                // Get available cuisines
+                $cuisineDocs = $firestore->collection('vendor_cuisines')->documents();
+                $cuisines = [];
+                foreach ($cuisineDocs as $cuisineDoc) {
+                    $cuisine = $cuisineDoc->data();
+                    if (isset($cuisine['title'])) {
+                        $cuisines[] = $cuisine['title'];
+                    }
+                }
+                
+                // Add available options to the sheet
+                $sheet->setCellValue('A5', 'Available Zones:');
+                $sheet->setCellValue('A6', implode(', ', $zones));
+                $sheet->getStyle('A5')->getFont()->setBold(true);
+                $sheet->getStyle('A6')->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('0066CC'));
+                
+                $sheet->setCellValue('A8', 'Available Cuisines:');
+                $sheet->setCellValue('A9', implode(', ', $cuisines));
+                $sheet->getStyle('A8')->getFont()->setBold(true);
+                $sheet->getStyle('A9')->getFont()->setColor(new \PhpOffice\PhpSpreadsheet\Style\Color('0066CC'));
+                
+            } catch (\Exception $e) {
+                $sheet->setCellValue('A5', 'Note: Could not load available zones and cuisines');
+                \Log::error('Error loading zones/cuisines for template: ' . $e->getMessage());
+            }
+            
+            // Auto-size columns
+            foreach (range('A', 'W') as $column) {
+                $sheet->getColumnDimension($column)->setAutoSize(true);
+            }
+            
+            // Add data validation for boolean fields
+            $booleanFields = ['O', 'P', 'U', 'V']; // isOpen, enabledDiveInFuture, hidephotos, specialDiscountEnable
+            foreach ($booleanFields as $column) {
+                for ($row = 2; $row <= 1000; $row++) {
+                    $validation = $sheet->getDataValidation($column . $row);
+                    $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+                    $validation->setFormula1('"true,false"');
+                    $validation->setAllowBlank(false);
+                    $validation->setShowDropDown(true);
+                    $validation->setPromptTitle('Boolean Value');
+                    $validation->setPrompt('Please select true or false');
+                    $validation->setShowErrorMessage(true);
+                    $validation->setErrorTitle('Invalid Value');
+                    $validation->setError('Please select true or false only');
+                }
+            }
+            
+            // Add data validation for country code
+            for ($row = 2; $row <= 1000; $row++) {
+                $validation = $sheet->getDataValidation('H' . $row);
+                $validation->setType(\PhpOffice\PhpSpreadsheet\Cell\DataValidation::TYPE_LIST);
+                $validation->setFormula1('"IN,US,UK,CA,AU,DE,FR,IT,ES,JP,CN,KR,BR,MX,AR,CL,CO,PE,VE,EC,BO,PY,UY,GY,SR,GF,FG"');
+                $validation->setAllowBlank(false);
+                $validation->setShowDropDown(true);
+                $validation->setPromptTitle('Country Code');
+                $validation->setPrompt('Please select a country code');
+                $validation->setShowErrorMessage(true);
+                $validation->setErrorTitle('Invalid Country Code');
+                $validation->setError('Please select a valid country code');
+            }
+            
+            // Create the Excel file
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $filePath = storage_path('app/templates/restaurants_bulk_update_template.xlsx');
+            
+            // Ensure directory exists
+            $directory = dirname($filePath);
+            if (!is_dir($directory)) {
+                mkdir($directory, 0755, true);
+            }
+            
+            $writer->save($filePath);
+            
+            return response()->download($filePath, 'restaurants_bulk_update_template.xlsx', [
+                'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition' => 'attachment; filename="restaurants_bulk_update_template.xlsx"'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Error generating restaurant template: ' . $e->getMessage());
+            return back()->withErrors(['file' => 'Error generating template: ' . $e->getMessage()]);
+        }
     }
 }
