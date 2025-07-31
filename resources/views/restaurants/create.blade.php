@@ -72,7 +72,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                                     {{ trans("lang.restaurant_cuisines_help") }} (Hold Ctrl/Cmd to select multiple)
                                 </div>
                                 </div>
-                            </div>                       
+                            </div>
                             <div class="form-group row width-50">
                                 <label class="col-3 control-label">Vendor Cuisine</label>
                                 <div class="col-7">
@@ -483,7 +483,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                                 </div>
                             </div>
                         </fieldset>
-                        
+
 
                         <fieldset id="dine_in_div" style="display: none;">
                             <legend>{{trans('lang.dine_in_future_setting')}}</legend>
@@ -1027,7 +1027,7 @@ foreach ($countries as $keycountry => $valuecountry) {
             placeholder: "Select Country",
             allowClear: true
         });
-    
+
         jQuery("#data-table_processing").show();
 
         await email_templates.get().then(async function(snapshots) {
@@ -1225,7 +1225,7 @@ foreach ($countries as $keycountry => $valuecountry) {
         console.log('Selected vendor ID:', selectedOwnerId);
         console.log('All vendor options:', $('#restaurant_vendors option').map(function() { return {value: $(this).val(), text: $(this).text()}; }).get());
         console.log('Selected vendor text:', $("#restaurant_vendors option:selected").text());
-        
+
         // Check if vendor is selected and valid
         if(selectedOwnerId && selectedOwnerId != '' && selectedOwnerId != null && selectedOwnerId != undefined && selectedOwnerId !== "No vendors available" && selectedOwnerId !== "Error loading vendors") {
             var vendorData=await getOwnerDetails(selectedOwnerId);
@@ -1256,10 +1256,10 @@ foreach ($countries as $keycountry => $valuecountry) {
             var subscriptionExpiryDate = null;
             var user_id = "admin_created";
             var user_profilepic = null;
-            
+
             console.log('Using default values for vendor data');
         }
-      
+
 
         var openDineTime=$("#openDineTime").val();
         var openDineTime_val=$("#openDineTime").val();
@@ -1374,14 +1374,14 @@ foreach ($countries as $keycountry => $valuecountry) {
                 break;
             }
         }
-        
+
         // If no working hours are set, add default times (9:30 AM to 10:00 PM) for all days
         if (!hasWorkingHours) {
             var defaultTimeslot = {
                 'from': '09:30',
                 'to': '22:00'
             };
-            
+
             for (var i = 0; i < workingHours.length; i++) {
                 workingHours[i].timeslot = [defaultTimeslot];
             }
@@ -1507,7 +1507,7 @@ foreach ($countries as $keycountry => $valuecountry) {
             console.log('Vendor Cuisine:', vendorCuisine);
             console.log('Working Hours:', workingHours);
             jQuery("#data-table_processing").show();
-            
+
             // Add timeout to prevent infinite loading
             var saveTimeout = setTimeout(function() {
                 jQuery("#data-table_processing").hide();
@@ -1516,7 +1516,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                 $(".error_top").append("<p>Request timed out. Please try again.</p>");
                 window.scrollTo(0,0);
             }, 60000); // 60 seconds timeout
-    
+
             if(story_vedios.length>0||story_thumbnail!='') {
                 if(story_vedios.length>0&&story_thumbnail=='') {
                     $(".error_top").show();
@@ -1564,13 +1564,13 @@ foreach ($countries as $keycountry => $valuecountry) {
                 console.log('Storing images...');
                 const IMG = await storeImageData();
                 console.log('Story image stored successfully');
-                
+
                 const GalleryIMG = await storeGalleryImageData();
                 console.log('Gallery images stored successfully:', GalleryIMG);
-                
+
                 const MenuIMG = await storeMenuImageData();
                 console.log('Menu images stored successfully:', MenuIMG);
-                
+
                 // Create restaurant data
                 const coordinates = new firebase.firestore.GeoPoint(latitude, longitude);
                 const restaurantData = {
@@ -1610,7 +1610,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                     'subscriptionExpiryDate': subscriptionExpiryDate,
                     'subscriptionTotalOrders': subscriptionOrderLimit
                 };
-                
+
                 // Update user vendorID if not admin created
                 if (user_id !== "admin_created") {
                     console.log('Updating user vendorID:', user_id, 'with restaurant ID:', restaurant_id);
@@ -1621,15 +1621,15 @@ foreach ($countries as $keycountry => $valuecountry) {
                 } else {
                     console.log('Skipping user update for admin created restaurant');
                 }
-                
+
                 // Create restaurant
                 await database.collection('vendors').doc(restaurant_id).set(restaurantData);
                 console.log('Restaurant created successfully');
-                
+
                 clearTimeout(saveTimeout);
                 jQuery("#data-table_processing").hide();
                 window.location.href = '{{ route("restaurants")}}';
-                
+
             } catch (error) {
                 clearTimeout(saveTimeout);
                 console.error('Error in restaurant creation process:', error);
@@ -1639,7 +1639,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                 $(".error_top").append("<p>Error creating restaurant: " + error.message + "</p>");
                 window.scrollTo(0, 0);
             }
-        
+
         }
 
     })
@@ -1715,7 +1715,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                             // if (type == 'photo') {
                             //     $("#uploaded_image").attr('src', photo);
                             //     $(".uploaded_image").show();
-                            // } else 
+                            // } else
                             if(type=='photos') {
 
                                 photocount++;
@@ -2338,7 +2338,7 @@ foreach ($countries as $keycountry => $valuecountry) {
         }
 
     }
-  
+
     async function getOwnerDetails(selectedOwnerId) {
         var data='';
         try {
@@ -2372,4 +2372,4 @@ foreach ($countries as $keycountry => $valuecountry) {
     })
 
 </script>
-@endsection  
+@endsection

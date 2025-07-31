@@ -80,7 +80,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                             <div class="form-group row width-50">
                                 <label class="col-3 control-label">{{trans('lang.restaurant_phone')}}</label>
                                     <div class="col-md-12">
-                                        <div class="phone-box position-relative" > 
+                                        <div class="phone-box position-relative" >
                                             <select name="country" id="country_selector1">
                                                 <?php foreach ($newcountries as $keycy => $valuecy) { ?>
                                                 <?php $selected = ""; ?>
@@ -856,11 +856,11 @@ foreach ($countries as $keycountry => $valuecountry) {
     });
     ref_deliverycharge.get().then(async function(snapshots_charge) {
         var deliveryChargeSettings = snapshots_charge.data();
-        try 
+        try
         {
             if (deliveryChargeSettings.vendor_can_modify) {
                 ref_charge.get().then(async function(snapshots) {
-                    try 
+                    try
                     {
                         var deliveryCharge = snapshots.docs[0].data();
                         var delivery_charges_per_km = deliveryCharge.delivery_charges_per_km;
@@ -872,7 +872,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                     }
                     catch (error) {
                     }
-                });  
+                });
             } else {
                 $("#delivery_charges_per_km").val(deliveryChargeSettings.delivery_charges_per_km);
                 $("#minimum_delivery_charges").val(deliveryChargeSettings.minimum_delivery_charges);
@@ -951,7 +951,7 @@ foreach ($countries as $keycountry => $valuecountry) {
             try {
                 if (!snapshots || !snapshots.docs || snapshots.docs.length <= 0) {
                     jQuery("#data-table_processing").hide();
-                    return false;  
+                    return false;
                 }
                 var restaurant = snapshots.docs[0].data();
                 if(restaurant.countryCode!="" && restaurant.countryCode!=null){
@@ -961,7 +961,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                     $(".restaurant_phone").val(shortEditNumber(restaurant.phonenumber));
                 }
                 $(".restaurant_name").val(restaurant.title);
-                
+
                 // Set isOpen checkbox
                 if (restaurant.hasOwnProperty('isOpen')) {
                     $("#is_open").prop("checked", restaurant.isOpen);
@@ -969,7 +969,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                     // Default to checked if not set
                     $("#is_open").prop("checked", true);
                 }
-                
+
                 if (restaurant.filters) {
                     $(".restaurant_cuisines").val(restaurant.filters.Cuisine);
                 }
@@ -1204,7 +1204,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                             .attr("value", data.id)
                             .text(data.title));
                     });
-                    
+
                     // Handle multiple category selection for existing restaurant
                     if (restaurant.categoryID) {
                         if (Array.isArray(restaurant.categoryID)) {
@@ -1222,9 +1222,9 @@ foreach ($countries as $keycountry => $valuecountry) {
                 }
                 ref_deliverycharge.get().then(async function(snapshots_charge) {
                     var deliveryChargeSettings = snapshots_charge.data();
-                    try 
+                    try
                     {
-                        if (deliveryChargeSettings.vendor_can_modify) 
+                        if (deliveryChargeSettings.vendor_can_modify)
                         {
                             $("#delivery_charges_per_km").val(restaurant.DeliveryCharge.delivery_charges_per_km);
                             $("#minimum_delivery_charges").val(restaurant.DeliveryCharge.minimum_delivery_charges);
@@ -1408,19 +1408,19 @@ foreach ($countries as $keycountry => $valuecountry) {
                     break;
                 }
             }
-            
+
             // If no working hours are set, add default times (9:30 AM to 10:00 PM) for all days
             if (!hasWorkingHours) {
                 var defaultTimeslot = {
                     'from': '09:30',
                     'to': '22:00'
                 };
-                
+
                 for (var i = 0; i < workingHours.length; i++) {
                     workingHours[i].timeslot = [defaultTimeslot];
                 }
             }
-            
+
             workingHours.push(monday);
             workingHours.push(tuesday);
             workingHours.push(wednesday);
@@ -2136,8 +2136,8 @@ foreach ($countries as $keycountry => $valuecountry) {
             $(".error_top").html("");
             $(".error_top").append("<p>Please Enter valid discount</p>");
             window.scrollTo(0, 0);
-        } 
-        else 
+        }
+        else
         {
                 if (typeof timeslotSunday === 'undefined') timeslotSunday = [];
                 if (typeof timeslotMonday === 'undefined') timeslotMonday = [];
@@ -2188,15 +2188,15 @@ foreach ($countries as $keycountry => $valuecountry) {
                             }
                     }
                 });
-    
+
 
             if (isDuplicate) {
                 $(".error_top").show();
                 $(".error_top").html("");
                 $(".error_top").append("<p>This time slot for " + type + " already exists. Please select a different time slot.</p>");
                 window.scrollTo(0, 0);
-            } 
-            else 
+            }
+            else
             {
                 var timeslotVar = {
                     'discount': discount,
@@ -2264,8 +2264,8 @@ foreach ($countries as $keycountry => $valuecountry) {
             $(".error_top").html("");
             $(".error_top").append("<p>Please Enter valid discount</p>");
             window.scrollTo(0, 0);
-        } 
-        else 
+        }
+        else
         {
                 if (typeof timeslotSunday === 'undefined') timeslotSunday = [];
                 if (typeof timeslotMonday === 'undefined') timeslotMonday = [];
@@ -2292,7 +2292,7 @@ foreach ($countries as $keycountry => $valuecountry) {
                     var [hours, minutes] = time.split(':');
                     return new Date(0, 0, 0, hours, minutes); // Using "0" date and month for comparison
                 }
-             
+
                 var newOpenTime = timeToDate(openTime);
                 var newCloseTime = timeToDate(closeTime);
                 existingTimeslots.forEach(function (slot, index) {
@@ -2310,14 +2310,14 @@ foreach ($countries as $keycountry => $valuecountry) {
                     }
                 });
 
-    
+
 
             if (isDuplicate) {
                 $(".error_top").show();
                 $(".error_top").html("");
                 $(".error_top").append("<p>This time slot for " + type + " already exists. Please select a different time slot.</p>");
                 window.scrollTo(0, 0);
-            } 
+            }
             else {
                 var timeslotVar = {
                     'discount': discount,
@@ -2590,7 +2590,7 @@ foreach ($countries as $keycountry => $valuecountry) {
             updateSelectedCategoryTags();
         });
 
-      
+
     });
       // 4. Update tags display
       function updateSelectedCategoryTags() {
