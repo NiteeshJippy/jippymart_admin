@@ -109,9 +109,16 @@ Route::middleware(['permission:coupons,coupons.create'])->group(function () {
 
 Route::middleware(['permission:foods,foods'])->group(function () {
     Route::get('/foods', [App\Http\Controllers\FoodController::class, 'index'])->name('foods');
-    Route::get('/foods/{id}', [App\Http\Controllers\FoodController::class, 'index'])->name('restaurants.foods');
-
 });
+
+// Food import routes - must be before /foods/{id} route to avoid conflicts
+Route::post('/foods/import', [App\Http\Controllers\FoodController::class, 'import'])->name('foods.import');
+Route::get('/foods/download-template', [App\Http\Controllers\FoodController::class, 'downloadTemplate'])->name('foods.download-template');
+
+Route::middleware(['permission:foods,foods'])->group(function () {
+    Route::get('/foods/{id}', [App\Http\Controllers\FoodController::class, 'index'])->name('restaurants.foods');
+});
+
 Route::middleware(['permission:foods,foods.edit'])->group(function () {
     Route::get('/foods/edit/{id}', [App\Http\Controllers\FoodController::class, 'edit'])->name('foods.edit');
 

@@ -12,6 +12,29 @@
             </ol>
         </div>
     </div>
+    
+    @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            {{ session('success') }}
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    @endif
+
+    @if($errors->any())
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <ul class="mb-0">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+            <button type="button" class="close" data-dismiss="alert" aria-label="Close">
+                <span aria-hidden="true">&times;</span>
+            </button>
+        </div>
+    @endif
+    
     <div class="container-fluid">
         <div class="admin-top-section">
             <div class="row">
@@ -45,6 +68,54 @@
                 </div>
             </div>
         </div>
+
+        <!-- Bulk Import Section -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card border">
+                    <div class="card-header d-flex justify-content-between align-items-center border-0">
+                        <div class="card-header-title">
+                            <h3 class="text-dark-2 mb-2 h4">Bulk Import Foods</h3>
+                            <p class="mb-0 text-dark-2">Upload Excel file to import multiple foods at once</p>
+                            <small class="text-info">
+                                <i class="mdi mdi-lightbulb-outline mr-1"></i>
+                                <strong>Tip:</strong> You can use vendor names and category names instead of IDs for easier data entry!
+                            </small>
+                        </div>
+                        <div class="card-header-right d-flex align-items-center">
+                            <div class="card-header-btn mr-3">
+                                <a href="{{ route('foods.download-template') }}" class="btn btn-outline-primary rounded-full">
+                                    <i class="mdi mdi-download mr-2"></i>Download Template
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <form action="{{ route('foods.import') }}" method="POST" enctype="multipart/form-data">
+                            @csrf
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="form-group">
+                                        <label for="importFile" class="control-label">Select Excel File (.xls/.xlsx)</label>
+                                        <input type="file" name="file" id="importFile" accept=".xls,.xlsx" class="form-control" required>
+                                        <div class="form-text text-muted">
+                                            <i class="mdi mdi-information-outline mr-1"></i>
+                                            File should contain: name, price, description, vendorID/vendorName, categoryID/categoryName, disPrice, publish, nonveg, isAvailable, photo
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <button type="submit" class="btn btn-primary rounded-full">
+                                        <i class="mdi mdi-upload mr-2"></i>Import Foods
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="table-list">
             <div class="row">
                 <div class="col-12">
@@ -131,6 +202,9 @@
         </div>
     </div>
 </div>
+
+
+
 @endsection
 @section('scripts')
 <script type="text/javascript">

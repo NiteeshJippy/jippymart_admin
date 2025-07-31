@@ -2432,7 +2432,19 @@ return [
     'update_plan_limit'=>'Update Plan Limit',
     'renew_plan'=>'Renew Plan',
     'change_expiry_date'=>'Change Expiry Date',
-    'can_not_accept_more_orders'=>'This store have reached the maximum order capacity for current plan,Upgrade the subscription to continue accepting orders seamlessly!.'
+    'can_not_accept_more_orders'=>'This store have reached the maximum order capacity for current plan,Upgrade the subscription to continue accepting orders seamlessly!.',
+    
+    // Import related translations
+    'import'=>'Import',
+    'download_template'=>'Download Template',
+    'import_foods'=>'Import Foods',
+    'select_file'=>'Select File',
+    'import_file_help'=>'Please select an Excel file (.xlsx or .xls) to import foods data.',
+    'import_instructions'=>'Import Instructions',
+    'import_instruction_1'=>'Make sure your Excel file has the correct column headers as shown in the template.',
+    'import_instruction_2'=>'Required fields: name, price, vendorID, categoryID',
+    'import_instruction_3'=>'vendorID and categoryID must exist in the system before importing.',
+    'import_instruction_4'=>'Boolean fields (publish, nonveg, isAvailable) should be "true" or "false".'
 
 ];
 ?>
