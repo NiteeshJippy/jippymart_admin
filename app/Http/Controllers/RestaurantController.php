@@ -1124,7 +1124,7 @@ class RestaurantController extends Controller
                 'vendor@example.com',               // authorEmail
                 'Biryani, Pizza',                   // categoryTitle
                 'Indian',                           // vendorCuisineTitle
-                '{"commissionType":"Percent","fix_commission":12,"isEnabled":true}', // adminCommission
+                '{"commissionType":"Fixed","fix_commission":12,"isEnabled":true}', // adminCommission
                 'true',                             // isOpen
                 'false',                            // enabledDiveInFuture
                 '250',                              // restaurantCost
